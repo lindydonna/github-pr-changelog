@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "outDir": "bin",
+        "outDir": "./dist",
         "target": "es6",
         "lib": [
             "es6", "es2017.object", "es2016.array.include"

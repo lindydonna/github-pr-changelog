@@ -2,7 +2,6 @@
   "name": "github-pr-changelog",
   "version": "0.1.0",
   "description": "Generate a changelog based on `git log` and GitHub pull requests",
-  "main": "index.ts",
   "scripts": {
     "start": "node ./bin/cli.js",
     "build": "tsc"
@@ -14,6 +13,15 @@
   "author": "lindydonna",
   "license": "Apache-2.0",
   "homepage": "https://github.com/lindydonna/github-pr-changelog#readme",
+  "main": "dist/cli.js",
+  "typings": "dist/cli.d.ts",
+  "bin": {
+    "gh-changelog": "bin/gh-changelog"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
   "dependencies": {
     "@octokit/rest": "^15.2.2",
     "colors": "^1.2.1",

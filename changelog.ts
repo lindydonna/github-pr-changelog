@@ -52,13 +52,19 @@ export async function getPullsInRange(
             pr => pr.labels.find( (l:any) => labelFilter.includes(l.name)) );
     }
     
-    let gitOutput = 
-        child_process.execSync(
-            `git rev-list ${fromTag}..${toTag}`, { cwd: gitDirectory, encoding: "utf8" }
-        );
+    try {
+        let gitOutput = 
+            child_process.execSync(
+                `git rev-list ${fromTag}..${toTag}`, { cwd: gitDirectory, encoding: "utf8" }
+            );
 
-    let gitHashes = gitOutput.split(os.EOL);
+        let gitHashes = gitOutput.split(os.EOL);
 
-    return closedPrs
-        .filter(pr => gitHashes.includes(pr.merge_commit_sha));
+        return closedPrs
+            .filter(pr => gitHashes.includes(pr.merge_commit_sha));
+    } catch (ex) {
+        console.error(`Error in git command in directory: ${gitDirectory}`);
+        console.error(ex.message);
+        return [];
+    }
 }
