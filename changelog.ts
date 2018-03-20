@@ -44,6 +44,9 @@ export async function getPullsInRange(
     gitHubToken: string,
     labelFilter?: string[]): Promise<any[]> { 
 
+    // output to standard error as informational, in case there are GitHub or git errors
+    console.error(`--- Getting closed PRs for ${owner}:${repo} ----`);
+
     let closedPrs = await getClosedPullRequests(owner, repo, gitHubToken);
 
     // filter to only pull requests in `labelFilter`
@@ -52,6 +55,7 @@ export async function getPullsInRange(
             pr => pr.labels.find( (l:any) => labelFilter.includes(l.name)) );
     }
     
+    console.error(`+++ Running git rev-list ${fromTag}..${toTag} in ${gitDirectory} +++`);
     try {
         let gitOutput = 
             child_process.execSync(
@@ -63,8 +67,6 @@ export async function getPullsInRange(
         return closedPrs
             .filter(pr => gitHashes.includes(pr.merge_commit_sha));
     } catch (ex) {
-        console.error(`Error in git command in directory: ${gitDirectory}`);
-        console.error(ex.message);
         return [];
     }
 }

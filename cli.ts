@@ -3,10 +3,19 @@ import * as program from "commander";
 import * as changelog from "./changelog";
 import * as colors from "colors";
 import * as path from "path";
+import { print } from "util";
+
+let description =
+   `GitHub pull request changelog generator
+  * By default, only PRs that have either "impact/changelog" or "impact/breaking" are printed. 
+  * To print all PRs, pass the CLI option --all-prs
+  * "Added" section: PRs whose label contains the word "feature" or "enhancement"
+  * "Fixed" section: PRs whose label contains the word "bug"
+  * "Changed" section: PRs that do not fall in the "Added" or "Fixed" category OR have the label "impact/breaking"`;
 
 program
     .version('0.1.0', '-v, --version')
-    .description('GitHub pull request changelog generator')
+    .description(description)
     .option('-f, --from <tag>', 'Start of changelog range, as a git tag or revision')
     .option('-t, --to <tag>', 'End of changelog range, as a git tag or revision')
     .option('-o, --owner <owner>', 'GitHub owner or organization')
@@ -32,17 +41,15 @@ let ghToken = program.token || process.env.GITHUB_TOKEN;
 
 program.gitDirectory = program.gitDirectory || ".";
 
-function formatAsMarkdown(gitHubPr: any, commentText: string): string {
-    let result = 
-        `<!-- ${commentText} ${gitHubPr.repoName}#${gitHubPr.number} -->\n`
-        + `-  ${gitHubPr.title} ([{${gitHubPr.repoName}#${gitHubPr.number}](${gitHubPr.html_url})).\n`
-        + `<!-- BEGIN BODY -->\n${gitHubPr.body}\n<!-- END BODY -->`;
-
-    return result;
+enum ItemSection {
+    Breaking = "[BREAKING]",
+    Added    = "Added",
+    Fixed    = "Fixed",
+    Changed  = "Changed"
 }
 
 (async () => {
-    
+
     const changelogLabels = program.allPrs ? undefined : [ "impact/changelog", "impact/breaking" ];
 
     let allPrs: any[] = [];
@@ -50,9 +57,7 @@ function formatAsMarkdown(gitHubPr: any, commentText: string): string {
     program.repos = program.repos.split(",");
 
     for (let repo of program.repos) {
-        let directory = path.join(program.gitDirectory, repo);
-        // console.log(`${repo}, ${directory}`);
-    
+        let directory = path.join(program.gitDirectory, repo);    
         // will filter on changelogLabels, which will be no filtering if `program.allPrs` is true
         allPrs = allPrs.concat(
             await changelog.getPullsInRange(
@@ -61,36 +66,79 @@ function formatAsMarkdown(gitHubPr: any, commentText: string): string {
         );
     }
 
-    // add fields for `changelog`, `breaking` and `repoName`
+    // add fields to the pull request objects, to make filtering easier
     allPrs.forEach(pr => {
-        pr.changelog = pr.labels.filter( (l: any) => l.name == "impact/changelog").length > 0;
-        pr.breaking = pr.labels.filter( (l: any) => l.name == "impact/breaking").length > 0;
         pr.repoName = pr.head.repo.full_name;
+
+        pr.changelog = hasLabelString(pr, "changelog");
+        pr.breaking  = hasLabelString(pr, "breaking");
+
+        // NOTE: pr.section will be undefined if items without "Changelog" are in the list
+        if (hasLabelString(pr, "bug")) {
+            pr.section = ItemSection.Fixed;
+        } else if (hasLabelString(pr, "feature") || hasLabelString(pr, "enhancement")) {
+            pr.section = ItemSection.Added;
+        } else if (pr.breaking) {
+            pr.section = ItemSection.Breaking;
+        } else if (pr.changelog) {
+            pr.section = ItemSection.Changed;
+        }
     }); 
 
     if (program.tabOutput) {
-        if (program.tabOutput) { // output as table
-            allPrs.forEach(pr => {
-                console.log(`${pr.title}\t${pr.user.login}\t${pr.changelog}\t${pr.breaking}\t${pr.repoName}\t=HYPERLINK("${pr.html_url}", "${pr.html_url}")`);
-            });
-        }
+        console.log(`Title\tUser\tIsChangelog\tIsBreaking\tChangelog Section\tRepo\tLink`)
+
+        allPrs.forEach(pr => {
+            console.log(
+                `${pr.title}\t${pr.user.login}\t${pr.changelog}\t${pr.breaking}\t${pr.section}\t` +
+                `${pr.repoName}\t=HYPERLINK("${pr.html_url}", "${pr.html_url}")`
+            );
+        });
     } else {
-        let addedPrs =   allPrs.filter(pr => pr.changelog && !pr.breaking);
-        let changedPrs = allPrs.filter(pr => pr.breaking);
-        let fixedPrs =   allPrs.filter(pr => !pr.changelog && !pr.breaking);
+        let breakingPrs = allPrs.filter(pr => pr.section == ItemSection.Breaking);
+        let changedPrs =  allPrs.filter(pr => pr.section == ItemSection.Changed || ItemSection.Breaking);
 
         console.log(`## [${program.to}] - 2018/MM/DD {#version-label}`);
         
-        console.log(`\n### Breaking`);
-        changedPrs.forEach(pr => { console.log(`<!-- BREAKING ${pr.repoName}#${pr.number} -->\n -   FIXME ${pr.title}`) });
+        console.log(`\n### Breaking`); // summary of breaking changes
+        printSection(ItemSection.Breaking, allPrs, false);
+        console.log("For more details, see the [VERSION NAME changed](#version-label-changed) section below.")
 
         console.log(`\n### Added`);
-        addedPrs.forEach(pr => { console.log(formatAsMarkdown(pr, "ADDED")) });
+        printSection(ItemSection.Added, allPrs, true); 
         
-        console.log("\n### Changed {#version-label}");
-        changedPrs.forEach(pr => { console.log(formatAsMarkdown(pr, "CHANGED")) });
+        console.log("\n### Changed {#version-label-changed}");
+        printSection(ItemSection.Breaking, allPrs, true) 
+        printSection(ItemSection.Changed, allPrs, true); 
 
         console.log("\n### Fixed");
-        fixedPrs.forEach(pr => { console.log(formatAsMarkdown(pr, "FIXED")) });
+        printSection(ItemSection.Fixed, allPrs, true); 
     }
+
+    console.error("*** Output complete ***");
 })();
+
+function hasLabelString(gitHubPr: any, labelText: string): boolean {
+    return gitHubPr.labels.filter( (l: any) => l.name.includes(labelText) ).length > 0
+}
+
+function formatAsMarkdown(gitHubPr: any, includeBody: boolean): string {
+    // print a prefix for [BREAKING]
+    let prefixStr = (gitHubPr.section == ItemSection.Breaking) ? gitHubPr.section : "";
+    let body = 
+        includeBody ? 
+        `<!-- BEGIN BODY ${gitHubPr.number} -->\n${gitHubPr.body}\n<!-- END BODY ${gitHubPr.number}-->` 
+        : "";
+
+    let result = 
+        `<!-- ${gitHubPr.section} ${gitHubPr.repoName}#${gitHubPr.number} -->\n`
+        + `-  ${prefixStr} ${gitHubPr.title} ([${gitHubPr.repoName}#${gitHubPr.number}](${gitHubPr.html_url})).\n`
+        + body;
+
+    return result;
+}
+
+function printSection(sectionFilter: ItemSection, gitHubPrs: any[], includeBody: boolean): void {
+    let sectionPrs = gitHubPrs.filter(pr => pr.section == sectionFilter);
+    sectionPrs.forEach(pr => { console.log(formatAsMarkdown(pr, includeBody)) });
+}
