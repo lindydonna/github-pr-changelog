@@ -100,10 +100,6 @@ enum ItemSection {
 
         console.log(`## [${program.to}] - 2018/MM/DD {#version-label}`);
         
-        console.log(`\n### Breaking`); // summary of breaking changes
-        printSection(ItemSection.Breaking, allPrs, false);
-        console.log("For more details, see the [VERSION NAME changed](#version-label-changed) section below.")
-
         console.log(`\n### Added`);
         printSection(ItemSection.Added, allPrs, true); 
         
