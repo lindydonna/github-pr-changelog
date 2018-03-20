@@ -42,7 +42,7 @@ let ghToken = program.token || process.env.GITHUB_TOKEN;
 program.gitDirectory = program.gitDirectory || ".";
 
 enum ItemSection {
-    Breaking = "[BREAKING]",
+    Breaking = "(Breaking) ", // the space at the end is important, as it makes formatting easier
     Added    = "Added",
     Fixed    = "Fixed",
     Changed  = "Changed"
@@ -128,7 +128,7 @@ function formatAsMarkdown(gitHubPr: any, includeBody: boolean): string {
 
     let result = 
         `<!-- ${gitHubPr.section} ${gitHubPr.repoName}#${gitHubPr.number} -->\n`
-        + `-  ${prefixStr} ${gitHubPr.title} ([${gitHubPr.repoName}#${gitHubPr.number}](${gitHubPr.html_url})).\n`
+        + `-  ${prefixStr}${gitHubPr.title} ([${gitHubPr.repoName}#${gitHubPr.number}](${gitHubPr.html_url})).\n`
         + body;
 
     return result;
