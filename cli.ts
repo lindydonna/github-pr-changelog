@@ -104,7 +104,7 @@ enum ItemSection {
 
         console.log('\nReleased on ' + moment().format('MMMM DD, YYYY'));
 
-        let contributors = Array.from(allContributors).sort().join('\n');
+        let contributors = Array.from(allContributors).sort().map(user => `[${user}](https://github.com/${user})`).join('\n');
         console.log(`\n**Contributors:**\n${contributors}`);
         
         console.log(`\n### Added`);
