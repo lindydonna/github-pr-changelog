@@ -3,7 +3,7 @@ import * as program from "commander";
 import * as changelog from "./changelog";
 import * as colors from "colors";
 import * as path from "path";
-import { print } from "util";
+import * as moment from "moment";
 
 let description =
    `GitHub pull request changelog generator
@@ -14,7 +14,7 @@ let description =
   * "Changed" section: PRs that do not fall in the "Added" or "Fixed" category OR have the label "impact/breaking"`;
 
 program
-    .version('0.1.0', '-v, --version')
+    .version('0.1.1', '-v, --version')
     .description(description)
     .option('-f, --from <tag>', 'Start of changelog range, as a git tag or revision')
     .option('-t, --to <tag>', 'End of changelog range, as a git tag or revision')
@@ -42,7 +42,7 @@ let ghToken = program.token || process.env.GITHUB_TOKEN;
 program.gitDirectory = program.gitDirectory || ".";
 
 enum ItemSection {
-    Breaking = "(Breaking) ", // the space at the end is important, as it makes formatting easier
+    Breaking = "(**Breaking**) ", // the space at the end is important, as it makes formatting easier
     Added    = "Added",
     Fixed    = "Fixed",
     Changed  = "Changed"
@@ -53,17 +53,20 @@ enum ItemSection {
     const changelogLabels = program.allPrs ? undefined : [ "impact/changelog", "impact/breaking" ];
 
     let allPrs: any[] = [];
+    let allContributors = new Set();
     
     program.repos = program.repos.split(",");
 
     for (let repo of program.repos) {
         let directory = path.join(program.gitDirectory, repo);    
+
         // will filter on changelogLabels, which will be no filtering if `program.allPrs` is true
-        allPrs = allPrs.concat(
-            await changelog.getPullsInRange(
+        let prResult = await changelog.getPullsInRange(
             program.owner, repo,
-            directory, program.from, program.to, ghToken, changelogLabels)
-        );
+            directory, program.from, program.to, ghToken, changelogLabels);
+
+        allPrs = allPrs.concat(prResult.pullRequests);
+        prResult.contributors.forEach(user => allContributors.add(user));
     }
 
     // add fields to the pull request objects, to make filtering easier
@@ -95,15 +98,19 @@ enum ItemSection {
             );
         });
     } else {
-        let breakingPrs = allPrs.filter(pr => pr.section == ItemSection.Breaking);
-        let changedPrs =  allPrs.filter(pr => pr.section == ItemSection.Changed || ItemSection.Breaking);
+        let anchorName = program.to.replace(/^v0/, 'v'); // remove leading zero in version
+        anchorName = anchorName.replace(/\./g, ''); // remove periods from version number (since they don't work in anchor)
+        console.log(`## ${program.to} {#${anchorName}}`);
 
-        console.log(`## [${program.to}] - 2018/MM/DD {#version-label}`);
+        console.log('\nReleased on ' + moment().format('MMMM DD, YYYY'));
+
+        let contributors = Array.from(allContributors).sort().join('\n');
+        console.log(`\n**Contributors:**\n${contributors}`);
         
         console.log(`\n### Added`);
         printSection(ItemSection.Added, allPrs, true); 
         
-        console.log("\n### Changed {#version-label-changed}");
+        console.log("\n### Changed");
         printSection(ItemSection.Breaking, allPrs, true) 
         printSection(ItemSection.Changed, allPrs, true); 
 

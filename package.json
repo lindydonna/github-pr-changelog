@@ -1,6 +1,6 @@
 {
   "name": "github-pr-changelog",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generate a changelog based on `git log` and GitHub pull requests",
   "scripts": {
     "start": "node ./bin/cli.js",
@@ -25,7 +25,8 @@
   "dependencies": {
     "@octokit/rest": "^15.2.2",
     "colors": "^1.2.1",
-    "commander": "^2.15.0"
+    "commander": "^2.15.0",
+    "moment": "^2.22.2"
   },
   "devDependencies": {
     "@types/node": "^8.0.27"
